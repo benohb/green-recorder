@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Green Recorder.  If not, see <http://www.gnu.org/licenses/>.
 import gi
+import os
 
 gi.require_version('Gtk','3.0')
 gi.require_version('AppIndicator3', '0.1')
@@ -26,6 +27,77 @@ import commands, subprocess, urllib, signal
 VideosFolder = commands.getoutput("cat $HOME/.config/user-dirs.dirs|grep XDG_VIDEOS_DIR|awk -F'/' '{print $2}'")[:-1]
 RecorderDisplay = commands.getoutput("xdpyinfo | grep 'dimensions:'|awk '{print $2}'")
 
+# List of compatible versions / expand it in future :-)
+supportlist = ['2.8.10','3.1.6','3.2.1','3.2.2','3.2.3']
+global gloffver 
+
+# which equivalent / Check if a program exists
+def which(fileex):
+    for path in os.environ["PATH"].split(os.pathsep):
+        if os.path.exists(os.path.join(path, fileex)):
+                return True
+
+    return False
+# check if a system has pulseaudio
+
+def pouls():
+	if which('ps'):
+		vr = subprocess.Popen(['ps', '-e'], stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+		tex, err = vr.communicate()
+		return tex.find("pulseaudio")<> -1
+	else:
+		return -1
+		
+# check ffmpeg version      
+def versionff():
+	
+	if which('ffmpeg'):
+		asin = ['0','1','2','3','4','5','6','7','8','9','.']
+		chrp=15
+		vr = subprocess.Popen(['ffmpeg', '-version'], stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+		out, err = vr.communicate()
+		cond = True
+		while cond:
+			chrp +=1
+			cond = out[chrp] in asin
+		gloffver=out[15:chrp]
+		return gloffver
+	else:
+		return 'missing'
+
+def configstart(window):
+	
+	if versionff() == 'missing':
+		dialogWindow = Gtk.MessageDialog(window,
+	                          Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+	                          Gtk.MessageType.QUESTION,
+	                          Gtk.ButtonsType.OK,
+	                          'Could not find ffmpeg executable')
+		dialogWindow.set_title('Error')
+
+		dialogWindow.show_all()
+		if dialogWindow.run() == Gtk.ResponseType.OK:
+			raise SystemExit
+		else:
+			dialogWindow.destroy()
+
+	gloffver = versionff()
+	if  gloffver not in supportlist:
+		
+		dialogWindow = Gtk.MessageDialog(window,
+	                          Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+	                          Gtk.MessageType.QUESTION,
+	                          Gtk.ButtonsType.OK,
+	                          'The version ' + gloffver + ' of ffmpeg is not supported yet \nYou may find problems with if')
+		dialogWindow.set_title('Error')
+
+		dialogWindow.show_all()
+		if dialogWindow.run() == Gtk.ResponseType.OK:
+			dialogWindow.destroy()
+		else:
+			dialogWindow.destroy()
+			
+			
 def recorderindicator():
     # Create the app indicator widget.
     indicator = appindicator.Indicator.new("Green Recorder", '/usr/share/pixmaps/green-recorder.svg', appindicator.IndicatorCategory.APPLICATION_STATUS)
@@ -69,8 +141,9 @@ def stoprecording(self):
     subprocess.Popen(["killall", "ffmpeg"])
     recordbutton.set_sensitive(True)
     window.show()
-
+    
 # Import the glade file and its widgets.
+
 builder = Gtk.Builder()
 builder.add_from_file("/usr/lib/green-recorder/ui.glade")
 
@@ -120,8 +193,7 @@ threadstext.set_label("Quality (1 is best):")
 # Make default checkboxes True.
 videocheck.set_active(True)
 microphonecheck.set_active(True)
-
-
+configstart(window)
 
 # The actions which should happen upon every signal.
 class Handler:
@@ -144,3 +216,4 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     window.show_all()
     Gtk.main()
+
